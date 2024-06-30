@@ -1,4 +1,6 @@
-local M = {}
+local M = {
+	PRDescriptionHandle = nil
+}
 local namespace_id
 
 function M.setup(opt)
@@ -18,8 +20,6 @@ end
 
 local function highlightHeadings()
 	local current_buf = vim.api.nvim_get_current_buf()
-	--local line_one = vim.api.nvim_buf_get_lines(current_buf, 0, 1, false)[1]
-	--highlight(current_buf, 0, string.len(line_one))
 	for i = 0, vim.api.nvim_buf_line_count(current_buf), 1 do
 		local lineContent = table.concat(vim.api.nvim_buf_get_lines(0, i, i + 1, false))
 		if isHeading(lineContent) then highlight(current_buf, i, string.len(lineContent)) end
@@ -49,6 +49,22 @@ function M.printLists()
 		return table.concat(content, "\n")
 	end
 	print(buffer_to_string())
+end
+
+function M.togglePopup()
+	if M.PRDescriptionHandle == nil then
+		local windows = vim.api.nvim_list_wins()
+		local totalWidth = 0
+		for _, v in pairs(windows) do
+			totalWidth = totalWidth + vim.api.nvim_win_get_width(v)
+		end
+		local width = 60
+		M.PRDescriptionHandle = vim.api.nvim_open_win(0, true,
+			{ relative = 'editor', row = 1, col = totalWidth - width, width = 60, height = 10, border = "shadow" })
+	else
+		vim.api.nvim_win_close(M.PRDescriptionHandle, true)
+		M.PRDescriptionHandle = nil
+	end
 end
 
 --vim.api.nvim_create_augroup('AutoFormatting', {})
