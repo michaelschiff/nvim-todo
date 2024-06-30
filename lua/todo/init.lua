@@ -2,6 +2,7 @@ local M = {
 	PRDescriptionHandle = nil
 }
 local namespace_id
+local this_buf
 
 function M.setup(opt)
 	return M
@@ -9,6 +10,22 @@ end
 
 local function isHeading(s)
 	return string.sub(s, 1, 1) == "#"
+end
+
+local function isChecked(l)
+	return string.sub(l, 1, 5) == "- [x]"
+end
+
+local function isDoneGroupHeading(s)
+	return string.sub(s, 1, 6) == "# DONE"
+end
+
+local function getDoneGroupStart()
+	for i = 0, vim.api.nvim_buf_line_count(this_buf), 1 do
+		local lineContent = table.concat(vim.api.nvim_buf_get_lines(0, i, i + 1, false))
+		if isDoneGroupHeading(lineContent) then return i end
+	end
+	return nil
 end
 
 local function highlight(current_buf, line_num, line_len)
@@ -19,18 +36,18 @@ local function highlight(current_buf, line_num, line_len)
 end
 
 local function highlightHeadings()
-	local current_buf = vim.api.nvim_get_current_buf()
-	for i = 0, vim.api.nvim_buf_line_count(current_buf), 1 do
+	for i = 0, vim.api.nvim_buf_line_count(this_buf), 1 do
 		local lineContent = table.concat(vim.api.nvim_buf_get_lines(0, i, i + 1, false))
-		if isHeading(lineContent) then highlight(current_buf, i, string.len(lineContent)) end
+		if isHeading(lineContent) then highlight(this_buf, i, string.len(lineContent)) end
 	end
 end
 
 
 function M.init()
 	vim.api.nvim_command(
-		'highlight default HighlightLine guifg=#ff007c gui=bold ctermfg=198 cterm=bold ctermbg=darkgreen')
+		'highlight default HighlightLine guifg=#cf007c gui=bold ctermfg=198 cterm=bold ctermbg=darkgreen')
 	namespace_id = vim.api.nvim_create_namespace('HighlightLineNamespace')
+	this_buf = vim.api.nvim_get_current_buf()
 	highlightHeadings()
 end
 
@@ -41,17 +58,29 @@ vim.api.nvim_create_autocmd('BufRead', {
 	callback = M.init
 })
 
-
--- BufWritePre
-function M.printLists()
-	local buffer_to_string = function()
-		local content = vim.api.nvim_buf_get_lines(0, 0, vim.api.nvim_buf_line_count(0), false)
-		return table.concat(content, "\n")
+vim.api.nvim_create_augroup('HandleCheckmark', {})
+vim.api.nvim_create_autocmd('BufWritePre', {
+	pattern = 'TODO.txt',
+	group = 'HandleCheckmark',
+	callback = function ()
+		local dgs = getDoneGroupStart()
+		if dgs == nil then return end
+		local toMoveCount = 0
+		local toMove = {}
+		for i = 0, vim.api.nvim_buf_line_count(this_buf), 1 do
+			local lineContent = table.concat(vim.api.nvim_buf_get_lines(0, i, i + 1, false))
+			if isChecked(lineContent) and i < dgs then
+				toMoveCount = toMoveCount + 1
+				table.insert(toMove, i)
+			end
+		end
+		for _, v in pairs(toMove) do
+			print(string.format("index: %d", v))
+		end
 	end
-	print(buffer_to_string())
-end
+})
 
-function M.togglePopup()
+function M.toggleDescription()
 	if M.PRDescriptionHandle == nil then
 		local windows = vim.api.nvim_list_wins()
 		local totalWidth = 0
@@ -66,12 +95,5 @@ function M.togglePopup()
 		M.PRDescriptionHandle = nil
 	end
 end
-
---vim.api.nvim_create_augroup('AutoFormatting', {})
---vim.api.nvim_create_autocmd('BufWritePre', {
---  pattern = 'TODO.txt',
---  group = 'AutoFormatting',
---  callback = M.printLists
---})
 
 return M
