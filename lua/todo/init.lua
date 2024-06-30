@@ -81,6 +81,8 @@ vim.api.nvim_create_autocmd('BufWritePre', {
 })
 
 function M.toggleDescription()
+	-- TODO(michaelschiff): this doesn't correctly handle the case where the window is closed directly by the user
+	-- e.g. if they :q in normal mode in that window
 	if M.PRDescriptionHandle == nil then
 		local windows = vim.api.nvim_list_wins()
 		local totalWidth = 0
