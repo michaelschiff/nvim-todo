@@ -4,7 +4,7 @@ local M = {
 local namespace_id
 local this_buf
 
-function M.setup(opt)
+function M.setup(_)
 	return M
 end
 
@@ -20,9 +20,13 @@ local function isDoneGroupHeading(s)
 	return string.sub(s, 1, 6) == "# DONE"
 end
 
+local function getLine(i)
+	return table.concat(vim.api.nvim_buf_get_lines(0, i, i+1, false))
+end
+
 local function getDoneGroupStart()
 	for i = 0, vim.api.nvim_buf_line_count(this_buf), 1 do
-		local lineContent = table.concat(vim.api.nvim_buf_get_lines(0, i, i + 1, false))
+		local lineContent = getLine(i)
 		if isDoneGroupHeading(lineContent) then return i end
 	end
 	return nil
@@ -37,15 +41,14 @@ end
 
 local function highlightHeadings()
 	for i = 0, vim.api.nvim_buf_line_count(this_buf), 1 do
-		local lineContent = table.concat(vim.api.nvim_buf_get_lines(0, i, i + 1, false))
+		local lineContent = getLine(i)
 		if isHeading(lineContent) then highlight(this_buf, i, string.len(lineContent)) end
 	end
 end
 
 
-function M.init()
-	vim.api.nvim_command(
-		'highlight default HighlightLine guifg=#cf007c gui=bold ctermfg=198 cterm=bold ctermbg=darkgreen')
+function M.bufRead()
+	vim.api.nvim_command('highlight default HighlightLine guifg=#cf007c gui=bold ctermfg=198 cterm=bold ctermbg=darkgreen')
 	namespace_id = vim.api.nvim_create_namespace('HighlightLineNamespace')
 	this_buf = vim.api.nvim_get_current_buf()
 	highlightHeadings()
@@ -55,7 +58,7 @@ vim.api.nvim_create_augroup('HighlightLine', {})
 vim.api.nvim_create_autocmd('BufRead', {
 	pattern = 'TODO.txt',
 	group = 'HighlightLine',
-	callback = M.init
+	callback = M.bufRead
 })
 
 vim.api.nvim_create_augroup('HandleCheckmark', {})
@@ -68,15 +71,26 @@ vim.api.nvim_create_autocmd('BufWritePre', {
 		local toMoveCount = 0
 		local toMove = {}
 		for i = 0, vim.api.nvim_buf_line_count(this_buf), 1 do
-			local lineContent = table.concat(vim.api.nvim_buf_get_lines(0, i, i + 1, false))
+			local lineContent = getLine(i)
 			if isChecked(lineContent) and i < dgs then
 				toMoveCount = toMoveCount + 1
 				table.insert(toMove, i)
 			end
 		end
+		-- reverse so that we dont change the line numbers of the lines we still need to delete
+		table.sort(toMove, function(x, y) return x > y end)
 		for _, v in pairs(toMove) do
-			print(string.format("index: %d", v))
+			local line = getLine(v)
+			-- delete the line we are moving, this changes the line numbers of everything below, but nothing above,
+			-- which we still have to move
+			vim.api.nvim_buf_set_lines(this_buf, v, v+1, false, {nil})
+			-- dgs is further down than the line we removed, so its line number is less by one
+			dgs = dgs - 1;
+			-- replace the DONE heading, with the itself and the completed line.
+			-- i.e. insert the deleted line after the DONE heading
+			vim.api.nvim_buf_set_lines(this_buf, dgs, dgs+1, false, {getLine(dgs), line})
 		end
+	highlightHeadings()
 	end
 })
 
