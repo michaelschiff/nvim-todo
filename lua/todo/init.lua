@@ -3,6 +3,7 @@ local M = {
 }
 local namespace_id
 local this_buf
+local info_buf = vim.api.nvim_create_buf(false, true)
 
 function M.setup(_)
 	return M
@@ -94,6 +95,8 @@ vim.api.nvim_create_autocmd('BufWritePre', {
 	end
 })
 
+--TODO(michaelschiff): changing focus back to the main window should trigger toggle close of the info window
+
 function M.toggleDescription()
 	-- TODO(michaelschiff): this doesn't correctly handle the case where the window is closed directly by the user
 	-- e.g. if they :q in normal mode in that window
@@ -104,8 +107,12 @@ function M.toggleDescription()
 			totalWidth = totalWidth + vim.api.nvim_win_get_width(v)
 		end
 		local width = 60
-		M.PRDescriptionHandle = vim.api.nvim_open_win(0, true,
-			{ relative = 'editor', row = 1, col = totalWidth - width, width = 60, height = 10, border = "shadow" })
+		local cursor_r,cursor_c = unpack(vim.api.nvim_win_get_cursor(0))
+		vim.api.nvim_buf_set_lines(info_buf, 0, -1, true, {"lorem", "ipsum"})
+		
+		-- col = totalWidth - width, # max of this and cursor_c + 5
+		M.PRDescriptionHandle = vim.api.nvim_open_win(info_buf, true,
+			{ relative = 'editor', row = cursor_r + 1, col = cursor_c, width = 60, height = 10, border = "shadow" })
 	else
 		vim.api.nvim_win_close(M.PRDescriptionHandle, true)
 		M.PRDescriptionHandle = nil
