@@ -99,8 +99,27 @@ vim.api.nvim_create_autocmd('BufWritePre', {
 
 function M.toggleDescription()
 	-- TODO(michaelschiff): this doesn't correctly handle the case where the window is closed directly by the user
-	-- e.g. if they :q in normal mode in that window
+	-- e.g. if they :q in normal mode in that window. In this case PRDescriptionHandle will be non-nil, but the else
+	-- condition will error because PRDescriptionHandle points to a closed window, so closing it again fails
 	if M.PRDescriptionHandle == nil then
+		-- curl -L \
+		--  -H "Accept: application/vnd.github+json" \
+		--  -H "Authorization: Bearer <YOUR-TOKEN>" \
+		--  -H "X-GitHub-Api-Version: 2022-11-28" \
+		--  https://api.github.com/repos/OWNER/REPO/pulls/PULL_NUMBER
+		local info = nil
+		local handle = io.popen("curl https://api.github.com/zen")
+		if handle == nil then
+			info = "<>"
+		else
+			info = handle:read("*a")
+			handle:close()
+		end
+		local info_lines = {}
+		for info_line in string.gmatch(info, "[^%s]+") do
+			table.insert(info_lines, info_line)
+		end
+
 		local windows = vim.api.nvim_list_wins()
 		local totalWidth = 0
 		for _, v in pairs(windows) do
@@ -108,8 +127,8 @@ function M.toggleDescription()
 		end
 		local width = 60
 		local cursor_r,cursor_c = unpack(vim.api.nvim_win_get_cursor(0))
-		vim.api.nvim_buf_set_lines(info_buf, 0, -1, true, {"lorem", "ipsum"})
-		
+		vim.api.nvim_buf_set_lines(info_buf, 0, -1, true, info_lines)
+
 		-- col = totalWidth - width, # max of this and cursor_c + 5
 		M.PRDescriptionHandle = vim.api.nvim_open_win(info_buf, true,
 			{ relative = 'editor', row = cursor_r + 1, col = cursor_c, width = 60, height = 10, border = "shadow" })
