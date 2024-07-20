@@ -1,6 +1,7 @@
 local M = {
-	PRDescriptionHandle = nil
+	PRDescriptionHandle = nil,
 }
+
 local namespace_id
 local this_buf
 local info_buf = vim.api.nvim_create_buf(false, true)
@@ -8,6 +9,8 @@ local info_buf = vim.api.nvim_create_buf(false, true)
 function M.setup(_)
 	return M
 end
+
+local function getCursorWord() return vim.fn.escape(vim.fn.expand('<cword>'), [[\/\#]]) end
 
 local function isHeading(s)
 	return string.sub(s, 1, 1) == "#"
@@ -96,19 +99,13 @@ vim.api.nvim_create_autocmd('BufWritePre', {
 })
 
 --TODO(michaelschiff): changing focus back to the main window should trigger toggle close of the info window
-
 function M.toggleDescription()
 	-- TODO(michaelschiff): this doesn't correctly handle the case where the window is closed directly by the user
 	-- e.g. if they :q in normal mode in that window. In this case PRDescriptionHandle will be non-nil, but the else
 	-- condition will error because PRDescriptionHandle points to a closed window, so closing it again fails
 	if M.PRDescriptionHandle == nil then
-		-- curl -L \
-		--  -H "Accept: application/vnd.github+json" \
-		--  -H "Authorization: Bearer <YOUR-TOKEN>" \
-		--  -H "X-GitHub-Api-Version: 2022-11-28" \
-		--  https://api.github.com/repos/OWNER/REPO/pulls/PULL_NUMBER
 		local info = nil
-		local handle = io.popen("curl https://api.github.com/zen")
+		local handle = io.popen(string.format("gh pr view https://github.com/Arize-ai/arize/pull/%s -q=\".title, .body\" --json=\"title,body\"", getCursorWord()))
 		if handle == nil then
 			info = "<>"
 		else
@@ -116,7 +113,7 @@ function M.toggleDescription()
 			handle:close()
 		end
 		local info_lines = {}
-		for info_line in string.gmatch(info, "[^%s]+") do
+		for info_line in string.gmatch(info, "[^\r\n]+") do
 			table.insert(info_lines, info_line)
 		end
 
@@ -131,7 +128,7 @@ function M.toggleDescription()
 
 		-- col = totalWidth - width, # max of this and cursor_c + 5
 		M.PRDescriptionHandle = vim.api.nvim_open_win(info_buf, true,
-			{ relative = 'editor', row = cursor_r + 1, col = cursor_c, width = 60, height = 10, border = "shadow" })
+			{ relative = 'editor', row = cursor_r + 1, col = cursor_c, width = 80, height = 10, style = "minimal", border = "shadow", title="info"})
 	else
 		vim.api.nvim_win_close(M.PRDescriptionHandle, true)
 		M.PRDescriptionHandle = nil
