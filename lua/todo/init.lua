@@ -8,39 +8,37 @@ local namespace_id
 local this_buf
 local info_buf = vim.api.nvim_create_buf(false, true)
 
-local state = {
-	tasks = {},
-	sections = {
-		headers = {},
-		done_section_header = nil,
-	}
+local tasks = {}
+local sections = {
+	headers = {},
+	done_section_header = nil,
 }
 
-function state.reset()
-	state.tasks = {}
-	state.sections.headers = {}
-	state.sections.done_section_header = nil
+local function reset()
+	tasks = {}
+	sections.headers = {}
+	sections.done_section_header = nil
 end
 
 
-function state.parse()
+local function parse()
 	for i = 0, vim.api.nvim_buf_line_count(this_buf), 1 do
 		local lineContent = utils.getLine(i)
 		if utils.isHeading(lineContent) then
 			local h = {lineNumber = i, lineLen = string.len(lineContent)}
-			table.insert(state.sections.headers, h)
+			table.insert(sections.headers, h)
 			if utils.isDoneGroupHeading(lineContent) then
-				state.sections.done_section_header = h
+				sections.done_section_header = h
 			end
 		end
 		if utils.isTask(lineContent) then
-			table.insert(state.tasks, {lineNumber = i, lineLen = string.len(lineContent)})
+			table.insert(tasks, {lineNumber = i, lineLen = string.len(lineContent)})
 		end
 	end
 end
 
-function state.highlight()
-	for _, v in pairs(state.sections.headers) do
+local function highlight()
+	for _, v in pairs(sections.headers) do
 		utils.highlight(namespace_id, this_buf, v.lineNumber, v.lineLen)
 	end
 end
@@ -49,8 +47,8 @@ function M.init()
 	vim.api.nvim_command('highlight default HighlightLine guifg=#cf007c gui=bold ctermfg=198 cterm=bold ctermbg=darkgreen')
 	namespace_id = vim.api.nvim_create_namespace('HighlightLineNamespace')
 	this_buf = vim.api.nvim_get_current_buf()
-	state.parse()
-	state.highlight()
+	parse()
+	highlight()
 end
 
 vim.api.nvim_create_augroup('HighlightLine', {})
@@ -65,12 +63,14 @@ vim.api.nvim_create_autocmd('BufWritePre', {
 	pattern = 'TODO.txt',
 	group = 'HandleCheckmark',
 	callback = function ()
-		if state.sections.done_section_header == nil then return end
+		reset()
+		parse()
+		if sections.done_section_header == nil then return end
 		local toMoveCount = 0
 		local toMove = {}
 		for i = 0, vim.api.nvim_buf_line_count(this_buf), 1 do
 			local lineContent = utils.getLine(i)
-			if utils.isChecked(lineContent) and i < state.sections.done_section_header.lineNumber then
+			if utils.isChecked(lineContent) and i < sections.done_section_header.lineNumber then
 				toMoveCount = toMoveCount + 1
 				table.insert(toMove, i)
 			end
@@ -83,12 +83,12 @@ vim.api.nvim_create_autocmd('BufWritePre', {
 			-- which we still have to move
 			vim.api.nvim_buf_set_lines(this_buf, v, v+1, false, {nil})
 			-- dgs is further down than the line we removed, so its line number is less by one
-			state.sections.done_section_header.lineNumber = state.sections.done_section_header.lineNumber - 1;
+			sections.done_section_header.lineNumber = sections.done_section_header.lineNumber - 1;
 			-- replace the DONE heading, with the itself and the completed line.
 			-- i.e. insert the deleted line after the DONE heading
-			vim.api.nvim_buf_set_lines(this_buf, state.sections.done_section_header.lineNumber, state.sections.done_section_header.lineNumber+1, false, {utils.getLine(state.sections.done_section_header.lineNumber), line})
+			vim.api.nvim_buf_set_lines(this_buf, sections.done_section_header.lineNumber, sections.done_section_header.lineNumber+1, false, {utils.getLine(sections.done_section_header.lineNumber), line})
 		end
-	state.sections.highlight()
+	highlight()
 	end
 })
 
