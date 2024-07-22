@@ -84,7 +84,7 @@ end
 function M.toggleDescription()
 	if M.PRDescriptionHandle == nil or not vim.api.nvim_win_is_valid(M.PRDescriptionHandle) then
 		local info = nil
-		local handle = io.popen(string.format("gh pr view https://github.com/Arize-ai/arize/pull/%s -q=\".title, .body\" --json=\"title,body\"", utils.getCursorWord()))
+		local handle = io.popen(string.format("gh pr view https://github.com/Arize-ai/arize/pull/%s -q=\".title, .state, .body\" --json=\"title,body,state\"", utils.getCursorWord()))
 		if handle == nil then
 			info = "<>"
 		else
@@ -111,6 +111,10 @@ function M.toggleDescription()
 		vim.api.nvim_win_close(M.PRDescriptionHandle, true)
 		M.PRDescriptionHandle = nil
 	end
+end
+
+function M.openPRLink()
+	io.popen(string.format("open https://github.com/Arize-ai/arize/pull/%s", utils.getCursorWord()))
 end
 
 vim.api.nvim_create_augroup('nvim-todo', {})
