@@ -2,11 +2,20 @@ local M = {
 	PRDescriptionHandle = nil,
 }
 
+local config = {
+	repo_template = "",
+	users = {},
+}
+
+M.config = config
+
 local utils = require("todo.utils")
 
 local namespace_id
+local this_win
 local this_buf
 local info_buf = vim.api.nvim_create_buf(false, true)
+local prs_buf = vim.api.nvim_create_buf(false, true)
 
 local tasks = {}
 local sections = {
@@ -47,6 +56,7 @@ function M.BufRead()
 	vim.api.nvim_command('highlight default HighlightLine guifg=#cf007c gui=bold ctermfg=198 cterm=bold ctermbg=darkgreen')
 	namespace_id = vim.api.nvim_create_namespace('nvim-todo')
 	this_buf = vim.api.nvim_get_current_buf()
+	this_win = vim.api.nvim_get_current_win()
 	parse()
 	highlight()
 end
@@ -77,24 +87,41 @@ function M.BufWritePre()
 		-- i.e. insert the deleted line after the DONE heading
 		vim.api.nvim_buf_set_lines(this_buf, sections.done_section_header.lineNumber, sections.done_section_header.lineNumber+1, false, {utils.getLine(sections.done_section_header.lineNumber), line})
 	end
+	reset()
+	parse()
 	highlight()
+end
+
+function M.runCMD(cmd, keep_output)
+	local info = nil
+	local handle = io.popen(cmd)
+	if handle == nil then
+		info = "<>"
+	else
+		info = handle:read("*a")
+		handle:close()
+	end
+	local info_lines = {}
+	if keep_output then
+		for info_line in string.gmatch(info, "[^\r\n]+") do
+			table.insert(info_lines, info_line)
+		end
+	end
+	return info_lines
+end
+
+function M.getPRDescription(pr_num)
+	return M.runCMD(string.format("gh pr view %s -q=\".title, .state, .body\" --json=\"title,body,state\"", M.config.repo_template .. "/" .. pr_num), true)
+end
+
+function M.getUserPRs(user)
+	return M.runCMD(string.format("gh pr list -A %s", user), true)
 end
 
 --TODO(michaelschiff): changing focus back to the main window should trigger toggle close of the info window
 function M.toggleDescription()
 	if M.PRDescriptionHandle == nil or not vim.api.nvim_win_is_valid(M.PRDescriptionHandle) then
-		local info = nil
-		local handle = io.popen(string.format("gh pr view https://github.com/Arize-ai/arize/pull/%s -q=\".title, .state, .body\" --json=\"title,body,state\"", utils.getCursorWord()))
-		if handle == nil then
-			info = "<>"
-		else
-			info = handle:read("*a")
-			handle:close()
-		end
-		local info_lines = {}
-		for info_line in string.gmatch(info, "[^\r\n]+") do
-			table.insert(info_lines, info_line)
-		end
+		local info_lines = M.getPRDescription(utils.getCursorWord())
 
 		local windows = vim.api.nvim_list_wins()
 		local totalWidth = 0
@@ -114,7 +141,15 @@ function M.toggleDescription()
 end
 
 function M.openPRLink()
-	io.popen(string.format("open https://github.com/Arize-ai/arize/pull/%s", utils.getCursorWord()))
+	io.popen(string.format("open %s", M.config.repo_template .. "/" .. utils.getCursorWord()))
+end
+
+function M.setup(args)
+	M.config = vim.tbl_deep_extend("force", M.config, args or {})
+
+	-- todo(michaelschiff): put this stuff in a dedicated function
+	vim.api.nvim_buf_set_lines(prs_buf, 0, -1, true, M.getUserPRs(M.config.users[1])) -- lua indexes from 1 because its cursed
+	vim.api.nvim_open_win(prs_buf, false, {win=this_win, split='below'})
 end
 
 vim.api.nvim_create_augroup('nvim-todo', {})
