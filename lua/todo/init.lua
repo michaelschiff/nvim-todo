@@ -146,11 +146,19 @@ end
 
 function M.setup(args)
 	M.config = vim.tbl_deep_extend("force", M.config, args or {})
+end
 
-	-- todo(michaelschiff): put this stuff in a dedicated function
-	vim.api.nvim_buf_set_lines(prs_buf, 0, -1, true, M.getUserPRs(M.config.users[1])) -- lua indexes from 1 because its cursed
+function M.openAllUserPRs()
+	local all_prs = {}
+	for _, user in pairs(M.config.users) do
+		for _,  pr in pairs(M.getUserPRs(user)) do
+			table.insert(all_prs, pr)
+		end
+	end
+	vim.api.nvim_buf_set_lines(prs_buf, 0, -1, true, all_prs)
 	vim.api.nvim_open_win(prs_buf, false, {win=this_win, split='below'})
 end
+
 
 vim.api.nvim_create_augroup('nvim-todo', {})
 vim.api.nvim_create_autocmd('BufRead', {
